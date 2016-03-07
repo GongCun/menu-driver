@@ -8,7 +8,7 @@ Gong Cun re-write it with Perl5, make enhancement on the sign handle, log record
 Please put the menu.pl, *.men on the same directory. The structure of *.men is very simple, only the title, the options, and the commands.The title of menu must be the first line; the options must use '[0-9a-zA-Z])' in the beginning of the row, but can't use 'b', 'm' and 'x', because 'b' means "back to preview main", 'm' means "Go back to main menu", and 'x' means "exit". The commands correspond to the options but with the '[0-9a-zA-Z]@' in the beginning, if the action is go to another menu, please use the command "change_menu menu.men".
 
 The following is the structure (see the detail on the .men file):
-
+--------------------------------------------------
 The main menu
 
 1) Goto the system menu.
@@ -20,7 +20,7 @@ The main menu
 1@change_menu ./system.men
 2@change_menu ./stop.men
 3@change_menu ./start.men
-
+--------------------------------------------------
 The stop menu
 
 1) Backup the system.
@@ -29,7 +29,7 @@ The stop menu
 
 1@sysback.ksh
 2@reboot.ksh
-
+--------------------------------------------------
 
 The script was tested on AIX5,6,7 with Perl5.
 
