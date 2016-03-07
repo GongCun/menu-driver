@@ -17,9 +17,9 @@ The main menu
 
 3) Goto the start menu.
 
-1@change_menu ./system.men
-2@change_menu ./stop.men
-3@change_menu ./start.men
+1\@change_menu ./system.men
+2\@change_menu ./stop.men
+3\@change_menu ./start.men
 --------------------------------------------------
 The stop menu
 
@@ -27,8 +27,8 @@ The stop menu
 
 2) Reboot the system.
 
-1@sysback.ksh
-2@reboot.ksh
+1\@sysback.ksh
+2\@reboot.ksh
 --------------------------------------------------
 
 The script was tested on AIX5,6,7 with Perl5.
