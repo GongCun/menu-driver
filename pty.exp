@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# The next line is executed by /bin/sh, but not expect \
+exec `which expect` -- "$0" ${1+"$@"}
+
+set CMD $argv
+set timeout -1
+
+if {[catch {eval spawn -noecho $CMD}]} {
+  puts stderr "Run $CMD error"
+  exit 1
+}
+
+interact
+
+set rc [lindex [eval wait -i $spawn_id] 3]
+exit $rc
