@@ -1,5 +1,6 @@
 # menu-driver
-A menu driver script for BOCM systems IPL
+A menu driver script for BOCM systems IPL.
+
 The first version was written by Micheal Cheong before 2011 with Korn Shell;
 Raymond Chan updated and used it on most AIX machines in BOCM for IPL operation;
 Gong Cun rewrited it in Perl, make enhancement on the signal handle, log record, paging output and curses-style operation.
@@ -55,13 +56,13 @@ $ cat stop.men
 ```
 
 ###Other tips###
-Sometime we need page the program's output use 'more' or 'less', but if the program is interactive, the 'more' or 'less' will not work. So I add a keyword 'PAUSE' to paging the output and will not block the program if it needs to interact with user. It depends on a script written in expect: pty.exp. The effect is equivalent to using the script command on MAC OS X or Linux:
+Sometime we need page the program's output use 'more' or 'less', but if the program is interactive, the 'more' or 'less' will not work. So I add a keyword 'PAUSE' to paging the output and will not block the program if it needs to interact with user. It depends on a script written in expect: pty.exp. The effect is equivalent to using the 'script' command on MAC OS X or Linux:
 ```bash
 $ script output.log [command]
 $ more output.log
 ```
 
-You even can use like this:
+You can even use like this:
 ```bash
 $ cat system.men
 The system maintenance menu
