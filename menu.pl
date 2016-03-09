@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-# $Id: menu.pl,v 1.2 2016/03/08 23:23:11 gongcunjust Exp $
+# $Id: menu.pl,v 2.0.3.4 2016/03/09 02:23:47 root Exp $
 use strict;
 use Fcntl;
 use Fcntl ":flock";
@@ -44,8 +44,13 @@ my @previous;
 my ($selected, $save_selected, $isselected) = (-1, -1, 0);
 my @path;
 my $pid;
-my $SETALIAS = "./setAlias.ksh";
+my $workdir = dirname($0);
+chomp($workdir = `cd $workdir; pwd`);
+my $SETALIAS = "/$workdir/setAlias.ksh";
 my $BUFSIZ = 1024;
+my ($envcmd, $ptycmd) = ("", ""); 
+$ptycmd = "./pty.exp " if -e "./pty.exp" and length(`which expect 2>/dev/null`) > 0;
+$envcmd = ". $SETALIAS; " if -e $SETALIAS;
 chomp(my $save = `stty -g`);
 
 $ENV{'TERM'} = 'vt100';
@@ -58,7 +63,7 @@ $SIG{'ALRM'} = sub { print STDERR "\nProcess $$ exiting...\n"; exit 0};
 # unlink $0 or warn "cannot unlink: $!";
 
 # change the working directory
-chdir dirname($0) or die "cannot change cwd: $!";
+chdir $workdir or die "cannot change cwd: $!";
 
 # check the process status #
 sysopen GLOBAL, "/dev/zero", O_RDWR || die $!;
@@ -352,8 +357,6 @@ sub dump_exec {
 	if (($execpid = fork()) < 0) {
 		die "Can't fork process: $!";
 	} elsif ($execpid == 0) { # child to execute the system command
-		my ($envcmd, $ptycmd) = ("", ""); 
-		$ptycmd = "./pty.exp " if -e "./pty.exp" and length(`which expect 2>/dev/null`) > 0;
 
 		##
 		## Remove the 'PAUSE', suppose the command don't have brace
@@ -362,15 +365,25 @@ sub dump_exec {
 		$cmd = "";
 		foreach my $i (0..$#fields) {
 			next if ($fields[$i] =~ /\bPAUSE\b/);
-			$cmd .= "eval $ptycmd $fields[$i]; ";
+			my $fixcmd = "";
+			my @argcmd = split /\s+/, $fields[$i];
+			foreach my $x (0..$#argcmd) {
+				my $tmpcmd = $argcmd[$x];
+
+                #-+- 'whence' is a ksh bulitin command, bash must use 'alias'
+                #-+- the script run on AIX most time,
+                #-+- and AIX use ksh as the default shell
+				chomp( my $realcmd = `$envcmd whence "$tmpcmd"` );
+				$fixcmd .= length($realcmd) ? "$realcmd " : "$argcmd[$x] ";
+			}
+			$cmd .= "$fixcmd; ";
 		}
 
 		my $tmp = $_;
-		$_ = $cmd; s/\;\s+$//g; $cmd = "($_) 2>&1";
+		$_ = $cmd; s/\;\s+$//g; $cmd = "$_ 2>&1";
 		$_ = $tmp;
 
-		$envcmd = ". $SETALIAS; " if -e $SETALIAS;
-		$cmd = $envcmd . "$cmd";
+		$cmd = "$ptycmd " . $cmd;
 
 		chomp(my $gettime=`date +%Y-%m-%d' '%T`);
 		$timestamp = sprintf("\n[%s] %s\n", $gettime, $cmd) or die $!;
@@ -381,6 +394,8 @@ sub dump_exec {
 		open(STDOUT, ">&FH1") || die "Can't dup STDOUT to FH1";
 		open(STDERR, ">&FH1") || die "Can't dup STDERR to FH1";
 		close FH1;
+		local $SIG{'INT'} = 'DEFAULT';
+		local $SIG{'QUIT'} = 'DEFAULT';
 		exec($cmd) || die "exec error: $!";
 	}
 
