@@ -1,5 +1,4 @@
 #!/usr/bin/perl
-# $Id: menu.pl,v 2.0.3.4 2016/03/09 02:23:47 root Exp $
 use strict;
 use Fcntl;
 use Fcntl ":flock";
@@ -45,11 +44,11 @@ my ($selected, $save_selected, $isselected) = (-1, -1, 0);
 my @path;
 my $pid;
 my $workdir = dirname($0);
-chomp($workdir = `cd $workdir; pwd`);
-my $SETALIAS = "/$workdir/setAlias.ksh";
+chomp($workdir = `cd $workdir; pwd -P`);
+my $SETALIAS = "$workdir/setAlias.ksh";
 my $BUFSIZ = 1024;
 my ($envcmd, $ptycmd) = ("", ""); 
-$ptycmd = "./pty.exp " if -e "./pty.exp" and length(`which expect 2>/dev/null`) > 0;
+$ptycmd = "$workdir/pty.exp " if -e "$workdir/pty.exp" and length(`which expect 2>/dev/null`) > 0;
 $envcmd = ". $SETALIAS; " if -e $SETALIAS;
 chomp(my $save = `stty -g`);
 
@@ -75,7 +74,7 @@ my $flock_info = pack $pack_fmt, F_RDLCK, SEEK_SET, 0, 0, 0 or die $!;
 if (fcntl(GLOBAL, F_GETLK, $ret_info)) {
 	my $pid = (unpack $pack_fmt, $ret_info)[3];
 	if ($pid) {
-		printf "the process %d is running, continue(y)/exit(n):", $pid;
+		printf "the process %d is running, continue(y)/exit(n): ", $pid;
 		while (chomp(my $c = <STDIN>)) {
 			if ($c eq 'y' || $c eq 'Y') {
 				last;
@@ -108,7 +107,7 @@ system "tput civis";
 sub except_handler { 
 	if (defined $@ and length $@) {
 		chomp($@);
-		my $buf = sprintf("\n%s; Press any key to return...", $@)
+		my $buf = sprintf("\n%s; Press any key to return... ", $@)
 			|| die $!;
 		my $n = length($buf);
 		print STDERR REVERSE $buf, RESET || die $!;
@@ -339,13 +338,53 @@ sub quit {
 
 sub logger {
 	my $content = $_[0];
+	my $handler = $_[1];
 	chomp(my $user = `whoami`);
 	chomp(my $tty = `tty`);
 	my $pid = $$;
 	chomp(my $gettime=`date +%Y-%m-%d' '%T`);
-	print INPUT "[".$user."][".$tty."][".$pid."]"."@".$gettime."@".$content."\n";
+	$handler = \*INPUT if (!(defined($handler) and length($handler)));
+	print $handler "[".$user."][".$tty."][".$pid."]"."@".$gettime."@".$content."\n";
 }
 
+sub fixcmd {
+	my $needlog = 0;
+	my $cmd = $_[0];
+	if ($cmd eq "-log") {
+		$needlog = 1;
+		$cmd = $_[1];
+		die "Can't find the command\n" if (length($cmd) == 0);
+	}
+
+	my @fields = split /\;/, $cmd;
+	$cmd = "";
+	foreach my $i (0..$#fields) {
+		next if ($fields[$i] =~ /\bPAUSE\b/);
+		my $fixcmd = "";
+		my @argcmd = split /\s+/, $fields[$i];
+		foreach my $x (0..$#argcmd) {
+			my $tmpcmd = $argcmd[$x];
+			#-+- bash should use 'alias' instead of 'whence' -+-
+			chomp( my $realcmd = `$envcmd whence -- "$tmpcmd"` );
+			$fixcmd .= length($realcmd) ? "$realcmd " : "$argcmd[$x] ";
+		}
+		$cmd .= "$fixcmd; ";
+	}
+
+	my $tmp = $_;
+	$_ = $cmd; s/\;\s+$//g; $cmd = "$_";
+	$_ = $tmp;
+
+
+	if ($needlog == 1 and defined($ptycmd) and length($ptycmd)) {
+		$cmd = "$ptycmd -log " . $cmd;
+	} else {
+		$cmd = "$ptycmd " . $cmd;
+	}
+
+	return $cmd;
+		
+}
 
 sub dump_exec {
 	my $cmd = $_[0];
@@ -361,34 +400,8 @@ sub dump_exec {
 		##
 		## Remove the 'PAUSE', suppose the command don't have brace
 		##
-		my @fields = split /\;/, $cmd;
-		$cmd = "";
-		foreach my $i (0..$#fields) {
-			next if ($fields[$i] =~ /\bPAUSE\b/);
-			my $fixcmd = "";
-			my @argcmd = split /\s+/, $fields[$i];
-			foreach my $x (0..$#argcmd) {
-				my $tmpcmd = $argcmd[$x];
-
-                #-+- 'whence' is a ksh bulitin command, bash must use 'alias'
-                #-+- the script run on AIX most time,
-                #-+- and AIX use ksh as the default shell
-				chomp( my $realcmd = `$envcmd whence "$tmpcmd"` );
-				$fixcmd .= length($realcmd) ? "$realcmd " : "$argcmd[$x] ";
-			}
-			$cmd .= "$fixcmd; ";
-		}
-
-		my $tmp = $_;
-		$_ = $cmd; s/\;\s+$//g; $cmd = "$_ 2>&1";
-		$_ = $tmp;
-
-		$cmd = "$ptycmd " . $cmd;
-
-		chomp(my $gettime=`date +%Y-%m-%d' '%T`);
-		$timestamp = sprintf("\n[%s] %s\n", $gettime, $cmd) or die $!;
-		$n = length($timestamp);
-		syswrite(OUTPUT, $timestamp, $n) == $n || die $!;
+		$cmd = &fixcmd($cmd);
+		&logger($cmd, \*OUTPUT);
 
 		close FH0;
 		open(STDOUT, ">&FH1") || die "Can't dup STDOUT to FH1";
@@ -553,16 +566,32 @@ START:
 			} else { 
 				local $SIG{'WINCH'} = 'IGNORE';
 				system "clear";
-				system "stty $save";
+				system "stty $save >/dev/null 2>&1";
 				system "tput cnorm";
 				if ($menu[$i]->cmd =~ /\bPAUSE\b/) {
 					&dump_exec($menu[$i]->cmd);
 				} else { 
 					my $cmd = $menu[$i]->cmd;
-					$cmd = ". $SETALIAS; eval " . $cmd if -e $SETALIAS;
+					$cmd = &fixcmd("-log", $cmd);
+					&logger($cmd, \*OUTPUT);
 					system($cmd);
+					my $rc = $?;
+
+					system "stty $save >/dev/null 2>&1";
+					system "tput cnorm";
+
+					my ($exit_value, $signal_num) = ($rc >> 8, $rc & 127);
+					if ($exit_value) {
+					  if ($signal_num) { 
+						  print STDOUT "\nCaught signal number: $signal_num\n";
+					  }
+					  print STDOUT "\nWarning: the system program exit code = $exit_value\n";
+					  print STDOUT "Press any key to return... ";
+					  &getchar;
+					}
+
 				}
-				system "stty $save";
+				system "stty $save >/dev/null 2>&1";
 				system "tput civis";
 			}
 		} 
