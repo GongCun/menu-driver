@@ -5,6 +5,17 @@ exec `which expect` -- "$0" ${1+"$@"}
 
 set CMD $argv
 set timeout -1
+set LOGFILE "output.log"
+
+if {[string equal [lindex $argv 0] "-log"] == 1} {
+  set pwd [file dirname $argv0]
+  cd $pwd
+  if {[file exists $LOGFILE] == 1} {
+    log_file -a output.log
+  }
+  set CMD [lrange $argv 1 end]
+}
+  
 
 if {[catch {eval spawn -noecho $CMD}]} {
   puts stderr "Run $CMD error"
