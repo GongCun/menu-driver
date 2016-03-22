@@ -9,6 +9,7 @@ set LOGFILE "output.log"
 
 if {[string equal [lindex $argv 0] "-log"] == 1} {
   set pwd [file dirname $argv0]
+  set pwd [file normalize $argv0]
   cd $pwd
   if {[file exists $LOGFILE] == 1} {
     log_file -a output.log
